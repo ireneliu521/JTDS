@@ -1,0 +1,315 @@
+---
+title: "Machine learning project"
+author: "Yun-Hui Liu"
+date: "May 28, 2017"
+output: html_document
+---
+#Clean & Combine general public tweets
+```{r}
+library(readxl)
+Tweet1<-read.csv("All_Tweets_And_Stats_2011_To_2013.csv")
+Tweet2<-read_excel("dashboard_x_usa_x_filter_nativeretweets.xlsx",sheet="Stream")
+Dtweets<-Dtweets[c(1:3)]
+Tweet1[c(4:7)]<-NULL
+Tweet2<-subset(Tweet2,Tweet2$Country=="US")
+Tweet2<-Tweet2[c(2,3,7)]
+colnames(Tweet2)<-c("Date","Time","Text")
+general<-rbind(Tweet1,Tweet2)
+write.table(general, "c:/Users/irene/Desktop/general.txt", sep="\t")
+```
+#Combine sector index
+```{r}
+library(readxl)
+CapitalGoods<-read_excel("Capital Goods index.xls",sheet="Performance Graph")
+HealthCare<-read_excel("Health Care index.xls",sheet="Performance Graph")
+Technology<-read_excel("Technology index.xls",sheet="Performance Graph")
+ConsumerServices<-read_excel("Consumer Service index.xls",sheet="Performance Graph")
+Energy<-read_excel("Energy index.xls",sheet="Performance Graph")
+Finance<-read_excel("Finance index.xls",sheet="Performance Graph")
+ConsumerDurables<-read_excel("Consumer Durable Goods index.xls",sheet="Performance Graph")
+ConsumerNonDurables<-read_excel("Consumer Non-Durable Goods index.xls",sheet="Performance Graph")
+BasicIndustries<-read_excel("Basic Industries index.xls",sheet="Performance Graph")
+Miscellaneous<-read.csv("Miscellaneous index.csv")
+PublicUtilities<-read_excel("Utilities index.xls",sheet="Performance Graph")
+Transportation<-read_excel("Infrastructure & Transportation index.xls",sheet="Performance Graph")
+```
+#Dictionary
+```{r}
+library(jsonlite)
+word=c("marketing","retail","consumer&technology","education","recruiting","small&business","fashion","travel&and&hospitality","restaurant","real&estate")
+url= paste("https://api.datamuse.com/words?rel_trg=",word,"&max=200",sep="")
+dict=list()
+for(i in 1:length(url)){
+  dict[[i]] =fromJSON(url[i])
+}
+```
+#Clean Stock data
+```{r}
+library(quantmod)
+library(Quandl)
+Quandl.api_key("c9PB9fXoca3E8fG6ursh")
+nasdaq_names = stockSymbols(exchange="NASDAQ")
+nyse_names = stockSymbols(exchange="NYSE")
+amex_names = stockSymbols(exchange="AMEX")
+myData = Quandl.datatable("WIKI/PRICES", paginate=TRUE, date.gt= "2016-01-01")
+tickers= data.frame(unique(myData$ticker))
+
+co_names = rbind(nyse_names,nasdaq_names,amex_names)
+names(tickers)= c("Symbol")
+sector= data.frame(unique(co_names$Sector))
+industry= data.frame(unique(co_names$Industry))
+
+stocks = merge(tickers,co_names,by="Symbol")
+head(stocks)
+
+names(stocks)= c("ticker","Name","LastSale","MarketCap", "IPOyear",   "Sector",    "Industry",  "Exchange")
+result = merge(stocks,myData, by = "ticker")
+result = result[,-3]
+result = result[,-3]
+
+Return = data.frame(result$close/result$open)
+result = cbind(result,Return)
+names(result)= c("ticker","Name","IPOyear","Sector","Industry","Exchange","date","open",
+ "high","low","close","volume","ex-dividend","split_ratio", "adj_open","adj_high",
+"adj_low","adj_close","adj_volume","Return")
+
+#if stock price go up means 1, otherwise -1
+result$Jump<-ifelse(result$Return>1,1,0)
+```
+#Mood score plus sector split Trump's tweets
+```{r}
+tweets=read.csv("Twitter-Download_Donald-Trump_7375-Tweets.csv")
+#sector dictionary
+library(jsonlite)
+library(plyr)
+word=c("health&care","transportation","finance","technology","capital&goods","consumer&services","consumer&non-durables","public&utilities","miscellaneous","basic&industries","energy")
+url= paste("https://api.datamuse.com/words?rel_trg=",word,"&max=200",sep="")
+dict=data.frame()
+
+for(i in 1:length(url)){
+  temp =fromJSON(url[i])
+  dict[1:nrow(temp),i]=temp[1]
+}
+colnames(dict)=word
+
+
+#mood dictionary 
+HIDict = readLines("inqdict.txt")
+dict_pos = HIDict[grep("Pos",HIDict)]
+poswords = NULL
+for (s in dict_pos) {
+    s = strsplit(s,"#")[[1]][1]
+    poswords = c(poswords,strsplit(s," ")[[1]][1])
+}
+dict_neg = HIDict[grep("Neg",HIDict)]
+negwords = NULL
+for (s in dict_neg) {
+    s = strsplit(s,"#")[[1]][1]
+    negwords = c(negwords,strsplit(s," ")[[1]][1])
+}
+poswords = tolower(poswords)
+negwords = tolower(negwords)
+#mood score+sector split
+library(tm)
+library(stringr)
+mood=matrix(,length(tweets$Tweet_Text),2)
+colnames(mood)=c("positive_score","negative_score")
+sectormatrix=matrix(,length(tweets$Tweet_Text),11)
+colnames(sectormatrix)=word
+for(i in 1:length(tweets$Tweet_Text)){
+    text = as.character(tweets$Tweet_Text[i])
+    text = unlist(strsplit(text," "))
+    ctext = Corpus(VectorSource(text))
+    ctext = tm_map(ctext, removeWords, stopwords("english"))
+    ctext = tm_map(ctext, removePunctuation) 
+    ctext = tm_map(ctext, tolower)
+    text = NULL
+        for (j in 1:length(ctext)) {
+            temp = ctext[[j]]$content
+            if (temp!="") { text = c(text,temp) }
+        }
+        text = as.array(text)
+        text = paste(text,collapse="\n")
+        text = str_replace_all(text, "[\r\n]" , " ")
+        text = unlist(strsplit(text," "))
+posmatch = match(text,poswords)
+numposmatch = length(posmatch[which(posmatch>0)])
+negmatch = match(text,negwords)
+numnegmatch = length(negmatch[which(negmatch>0)])
+mood[i,]=c(numposmatch,numnegmatch)
+
+for(j in 1:11){
+sectormatch = match(text,as.character(dict[,j]))
+sectorcount=length(sectormatch[which(sectormatch>0)])
+sectormatrix[i,j]=sectorcount
+}
+}
+mood=as.data.frame(mood)
+mood$total_score=mood$positive_score-mood$negative_score
+tweets=cbind(tweets,mood)
+sectormatrix2=as.data.frame(sectormatrix)
+sectormatrix2$num_industies=rowSums(sectormatrix2)
+tweets=cbind(tweets,sectormatrix2)
+```
+#Mood score plus sector split general public tweets
+```{r}
+library(dplyr)
+gtweets=read.table("general.txt")
+gtweets<-sample_n(as.data.frame(gtweets),7375)
+#mood score+sector split
+library(tm)
+library(stringr)
+mood=matrix(,length(gtweets$Text),2)
+colnames(mood)=c("positive_score","negative_score")
+sectormatrix=matrix(,length(gtweets$Text),11)
+colnames(sectormatrix)=word
+for(i in 1:length(gtweets$Text)){
+    text = as.character(gtweets$Text[i])
+    text = unlist(strsplit(text," "))
+    ctext = Corpus(VectorSource(text))
+    ctext = tm_map(ctext, removeWords, stopwords("english"))
+    ctext = tm_map(ctext, removePunctuation) 
+    ctext = tm_map(ctext, tolower)
+    text = NULL
+        for (j in 1:length(ctext)) {
+            temp = ctext[[j]]$content
+            if (temp!="") { text = c(text,temp) }
+        }
+        text = as.array(text)
+        text = paste(text,collapse="\n")
+        text = str_replace_all(text, "[\r\n]" , " ")
+        text = unlist(strsplit(text," "))
+posmatch = match(text,poswords)
+numposmatch = length(posmatch[which(posmatch>0)])
+negmatch = match(text,negwords)
+numnegmatch = length(negmatch[which(negmatch>0)])
+mood[i,]=c(numposmatch,numnegmatch)
+
+for(j in 1:11){
+sectormatch = match(text,as.character(dict[,j]))
+sectorcount=length(sectormatch[which(sectormatch>0)])
+sectormatrix[i,j]=sectorcount
+}
+}
+mood=as.data.frame(mood)
+mood$total_score=mood$positive_score-mood$negative_score
+gtweets=cbind(gtweets,mood)
+sectormatrix2=as.data.frame(sectormatrix)
+sectormatrix2$num_industies=rowSums(sectormatrix2)
+gtweets=cbind(gtweets,sectormatrix2)
+```
+#Model
+```{r}
+library(dplyr)
+Trump<-tweets[c(15:26)]
+General<-gtweets[c(6:17)]
+TDG<-rbind(Trump,General)
+Jump<-sample_n(as.data.frame(result$Jump),14750)
+y<-as.matrix(Jump)
+x<-as.matrix(TDG)
+```
+#LDA
+```{r}
+library(MASS)
+yf = factor(y)
+dm = lda(yf~x)
+dm
+pred=predict(dm)$class
+out = table(y,pred)     
+print(out)
+chisq.test(out)
+return_prediction<-ifelse(pred >= 0.5,1,0)
+misClasificError<-mean(return_prediction != y)
+print(paste('Accuracy',1-misClasificError))
+###Warning message:
+###In lda.default(x, grouping, ...) : variables are collinear
+```
+#Bayes
+```{r}
+library(e1071)
+yf = factor(y) 
+res = naiveBayes(x,yf)
+pred=predict(res,x)
+out = table(y,pred)     
+print(out)
+chisq.test(out)
+###p-value is greater than 0.05
+print(paste('Accuracy',sum(diag(out))/sum(out)))
+#0.5045
+```
+#Logit
+```{r}
+h = glm(y~x, family=binomial(link="logit")) 
+print(logLik(h))
+summary(h)
+fitted= round(h$fitted.values,0)
+fitted = matrix(fitted)
+out = table(y,fitted)
+print(paste('Accuracy',sum(diag(out))/sum(out)))
+#0.5075
+```
+#Probit
+```{r}
+h = glm(y~x, family=binomial(link="probit"))
+print(logLik(h))
+summary(h)
+fitted= round(h$fitted.values,0)
+fitted = matrix(fitted)
+out = table(y,fitted)
+print(paste('Accuracy',sum(diag(out))/sum(out)))
+#0.5075
+```
+#SVM
+```{r}
+library(e1071)
+model<-svm(x,y)
+model
+out<-predict(model,x)
+fitted<-round(out,0)
+fitted<-matrix(fitted)
+table(y,fitted)
+return_prediction<-ifelse(out >= 0.5,1,0)
+misClasificError<-mean(return_prediction != y)
+print(paste('Accuracy',1-misClasificError))
+#0.5239
+```
+#GLMnet
+```{r}
+suppressMessages(library(glmnet))
+res = cv.glmnet(x = x, y = y, family = 'binomial', alpha = 1, type.measure = "auc")
+
+res = glmnet(x = x, y = y, family = 'binomial', alpha = 1)
+preds = predict(res, x, type = 'response')
+preds = preds[,22]
+print(glmnet:::auc(y, preds))
+#0.5090
+```
+#Random Forrest
+```{r}
+library(randomForest)
+yf = factor(y)
+res = randomForest(x,yf)
+print(res)
+pred = predict(res,data.frame(x))
+out = table(pred,y)
+return_prediction<-ifelse(out >= 0.5,1,0)
+misClasificError<-mean(return_prediction != y)
+print(paste('Accuracy',1-misClasificError))
+#0.5238
+```
+#NeuralNet
+```{r}
+library(neuralnet)
+library(deepnet)
+nn = nn.train(x, y, hidden = c(5))
+yy = nn.predict(nn,x)
+yhat = matrix(0,length(yy),1)
+yhat[which(yy > mean(yy))] = 1
+yhat[which(yy <= mean(yy))] = 0
+out = (table(yhat,y))
+return_prediction<-ifelse(out >= 0.5,1,0)
+misClasificError<-mean(return_prediction != y)
+print(paste('Accuracy',1-misClasificError))
+#0.5238
+```
+
