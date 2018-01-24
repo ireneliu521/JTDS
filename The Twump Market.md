@@ -578,13 +578,13 @@ library(ggplot2)
 ``` r
 figure(width=900,height=900) %>% ly_points(x="Cdate",y="total_score",data=masterdata,hover=c(Cdate,total_score))%>% ly_lines(x="Cdate",y="total_score",data=masterdata,hover=c(Cdate,total_score))
 ```
-#######Please refer to the 
+Please refer to the Fluctuation Plot of General Mood Score by Date.
 
 ``` r
 figure(width=900,height=900) %>% ly_points(x="Cdate",y="total_score",data=masterdata,hover=c(Cdate,total_score))%>% ly_lines(x="Cdate",y="total_score",data=masterdata,hover=c(Cdate,total_score))%>% ly_lines(x="Cdate",y="Count",data=tweetsag,col = "red")
 ```
-#######Please refer to the
-As you can see from the chart, the lowest mood score was on the day of ####colorado trump rally####
+Please refer to the Comparison of Trump's Mood Score and General Mood Score chart.
+As you can see from the chart, the lowest general mood score was on the day of colorado trump rally.
 
 
 Avg Tweets Per Day of Week Pre and Post Presidency
