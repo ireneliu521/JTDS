@@ -1,3 +1,4 @@
 # The Twump Market
+By Hao Shu, Garrett Stapleton, Irene Liu 
 
-
+In this project, we want to look into the question that how Trump's tweets affect the stock market. We first downloaded the SP500 returns using quantmod and then downloaded the tweets using Twitter's API. At the first glance, the relationship between those two was not significant. We then applied machine learning method (SVM) to try to predict if there will be a jump on the stock market after Trump tweets. But the accuracy we got was not significant either. We also did some interesting plots such as the wordcloud before and after the election and the comparison chart between Trump's mood score and general mood score during the same period. Summarizing Trump's tweets into three topics was the other interesting part we did in this project.
